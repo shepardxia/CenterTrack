@@ -253,6 +253,9 @@ class opts(object):
     # custom dataset
     self.parser.add_argument('--custom_dataset_img_path', default='')
     self.parser.add_argument('--custom_dataset_ann_path', default='')
+    
+    # crop or not
+    self.parser.add_argument('--crop', action='store_true')
 
   def parse(self, args=''):
     if args == '':
@@ -323,6 +326,13 @@ class opts(object):
     
     if opt.resume and opt.load_model == '':
       opt.load_model = os.path.join(opt.save_dir, 'model_last.pth')
+
+    # log mode
+    if opt.crop:
+      print("Cropping mode is on (modified)")
+    else:
+      print("full frame mode is on (baseline)")
+    
     return opt
 
 

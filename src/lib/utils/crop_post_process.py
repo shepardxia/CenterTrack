@@ -18,7 +18,7 @@ def get_alpha(rot):
   alpha2 = np.arctan2(rot[:, 6], rot[:, 7]) + ( 0.5 * np.pi)
   return alpha1 * idx + alpha2 * (1 - idx)
 
-def generic_post_process(
+def generic_post_process(mode, \
   opt, dets, c, s, h, w, num_classes, calibs=None, height=-1, width=-1):
   if not ('scores' in dets):
     return [{}], [{}]
@@ -29,7 +29,7 @@ def generic_post_process(
     trans = get_affine_transform(
       c[i], s[i], 0, (w, h), inv=1).astype(np.float32)
     for j in range(len(dets['scores'][i])):
-      if dets['scores'][i][j] < opt.out_thresh:
+      if mode == 0 and dets['scores'][i][j] < opt.out_thresh:
         break
       item = {}
       item['score'] = dets['scores'][i][j]
@@ -87,6 +87,5 @@ def generic_post_process(
         preds[j]['velocity'] = dets['velocity'][i][j]
 
     ret.append(preds)
-  #if(len(ret[0]) == 0):
-  #  print("empty!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+
   return ret
