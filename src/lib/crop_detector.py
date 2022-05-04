@@ -52,6 +52,7 @@ class Detector(object):
         self.pre_image_ori = None
         self.tracker = Tracker(opt)
         self.debugger = Debugger(opt=opt, dataset=self.trained_dataset)
+        self.keep_clses = [3, 6, 8]
 
     def crop_tracklets(self, frame, pre_hms, meta):
         """
@@ -154,10 +155,10 @@ class Detector(object):
 
 
     def run(self, image_or_path_or_tensor, mode=0, meta={}):
-        if(mode == 1):
-            print("crop frame!")
-        else:
-            print("full frame!")
+        #if(mode == 1):
+        #    print("crop frame!")
+        #else:
+        #    print("full frame!")
         load_time, pre_time, net_time, dec_time, post_time = 0, 0, 0, 0, 0
         merge_time, track_time, tot_time, display_time = 0, 0, 0, 0
         self.debugger.clear()
@@ -219,6 +220,7 @@ class Detector(object):
             pre_process_time = time.time()
             pre_time += pre_process_time - scale_start_time
             best = None
+            kept = None
 
             if(mode == 0):
                 # full frame detction
@@ -249,12 +251,14 @@ class Detector(object):
                     for key in dets:
                         if key == 'pre_cts': continue
                         dets[key] = dets[key][np.newaxis,idx,keep]
+                    kept = torchvision.ops.nms(torch.from_numpy(dets['bboxes'][0]), best.to('cpu'), 0.8)
                     
                     
                     
                 else:
                     output, dets, forward_time = self.process(
                         0, images, self.pre_images, pre_hms, pre_inds, return_time=True)
+                    mode = 0
                 net_time += forward_time - pre_process_time
                 decode_time = time.time()
                 dec_time += decode_time - forward_time
@@ -263,10 +267,21 @@ class Detector(object):
 
             # convert the cropped and 4x downsampled output coordinate system
             # back to the input image coordinate system
-            print(dets['scores'])
             result = self.post_process(mode, dets, meta, scale)
             post_process_time = time.time()
             post_time += post_process_time - decode_time
+
+            if mode == 0:
+                remove_list = []
+                for item in result:
+                    if item['class'] not in self.keep_clses:
+                        #print("remove: ", item['class'], " that is ", self.debugger.names[item['class'] - 1])
+                        remove_list.append(item)
+                    #else:
+                        #print("keep: ", self.debugger.names[item['class'] - 1])
+                #print(remove_list)
+                for i in remove_list:
+                    result.remove(i)
 
             detections.append(result)
             if self.opt.debug >= 2:
@@ -285,7 +300,7 @@ class Detector(object):
             # public detection mode in MOT challenge
             public_det = meta['cur_dets'] if self.opt.public_det else None
             # add tracking id to results
-            results = self.tracker.step(results, mode, public_det, score=best)
+            results = self.tracker.step(results, mode, public_det, score=best, kept=kept)
             self.pre_images = images
 
         tracking_time = time.time()

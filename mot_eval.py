@@ -18,6 +18,8 @@ import numpy as np
 import xml.etree.ElementTree as ET
 import _pickle as pickle
 import matplotlib.pyplot as plt
+import os
+import cv2
 
 def parse_labels(label_file):
      """
@@ -208,7 +210,10 @@ def test_regions_fraction(regions,bbox,cutoff = 0.5):
         ymin = max(region[1],bbox[1])
         ymax = min(region[3],bbox[3])
         intersection = max(0,(xmax - xmin)) * max(0,(ymax - ymin))
-        overlap = intersection  / area
+        if area != 0:
+            overlap = intersection  / area
+        else:
+            overlap = 1
         
         if overlap > cutoff:
             return True
@@ -236,7 +241,6 @@ def evaluate_mot(preds,gts,ignored_regions = [],threshold = 100,ignore_threshold
     -------
         metrics : list of MOT metrics for the tracks
     """
-    
     acc = motmetrics.MOTAccumulator(auto_id = True)
     try:
         assert len(preds) == len(gts) , "Length of predictions and ground truths are not equal: {},{}".format(len(preds),len(gts))
@@ -256,25 +260,40 @@ def evaluate_mot(preds,gts,ignored_regions = [],threshold = 100,ignore_threshold
             
             # if not exclude:
                 gt_ids.append(obj["id"])
+                #cv2.rectangle(image, ((int)(obj["bbox"][0]),(int)(obj["bbox"][1])), ((int)(obj["bbox"][2]),(int)(obj["bbox"][3])), (255,0,0), 1)
         gt_ids = np.array(gt_ids)
         
         
         # get preds in desired format
         pred = preds[frame]
+        #print("fuck you")
+        #print("total bboxes is:", len(preds[frame]))
+        #print("fuck you")
         pred_ids = [] # object ids for each object in this frame
         pred_idxs = [] # the index for each object in the frame, not id
+
+
+        #cnt = 0
+        #tot = 0
         for i,obj in enumerate(pred):
             
             #pred object center
             #px = (obj["bbox"][0] + obj['bbox'][2]) /2.0
             #py = (obj["bbox"][1] + obj['bbox'][3]) /2.0
             #exclude = test_regions(ignored_regions,px,py)
+            #tot += 1
             
             exclude = test_regions_fraction(ignored_regions,obj['bbox'], cutoff = ignore_threshold)
             
             if not exclude:
                 pred_ids.append(obj["id"])
+                #cv2.rectangle(image, ((int)(obj["bbox"][0]),(int)(obj["bbox"][1])), ((int)(obj["bbox"][2]),(int)(obj["bbox"][3])), (0,255,0), 1)
                 pred_idxs.append(i)
+                #cnt += 1
+        #cv2.imshow('image',image)
+        #cv2.waitKey(0)
+        #print("before removal cnt is:", tot)
+        #print("after removal cnt is:", cnt)
         pred_ids = np.array(pred_ids)
         pred_idxs = np.array(pred_idxs)
         
@@ -329,6 +348,7 @@ def evaluate_mot(preds,gts,ignored_regions = [],threshold = 100,ignore_threshold
         
         # update accumulator
         acc.update(gt_ids,pred_ids,dist)
+        #print("distances are:", dist)
         
         print("\rEvaluating frame {} of {}".format(frame,len(gts)), end = '\r', flush = True)
 

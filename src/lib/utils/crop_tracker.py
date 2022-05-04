@@ -25,7 +25,7 @@ class Tracker(object):
     self.id_count = 0
     self.tracks = []
 
-  def step(self, results, mode, public_det=None, score=None):
+  def step(self, results, mode, public_det=None, score=None, kept=None):
 
     ret = []
 
@@ -35,7 +35,7 @@ class Tracker(object):
       unmatched_dets = []
       unmatched_tracks = []
       for i in score:
-        if i // 0.2 > 0:
+        if i // 0.5 > 0 and cnt in kept:
           matches.append([cnt, cnt])
         else:
           unmatched_tracks.append(cnt)

@@ -35,7 +35,7 @@ def results_format_and_output(results, time, frames, save_name):
     ret = []
     ret.append([time, frames])
     ret.append(dets)
-    json.dump(ret, open('./bench/DETRAC-coco-stat/{}.json'.format(save_name), 'w'))
+    json.dump(ret, open('./bench/DETRAC-coco-stats/{}.json'.format(save_name), 'w'))
 
     
 
@@ -54,7 +54,7 @@ def demo(opt, read_folder=None):
                 ext = file_name[file_name.rfind('.') + 1:].lower()
                 if ext in image_ext:
                     image_names.append(os.path.join(read_folder, file_name))
-    if opt.demo == 'webcam' or \
+    elif opt.demo == 'webcam' or \
             opt.demo[opt.demo.rfind('.') + 1:].lower() in video_ext:
         is_video = True
         # demo on video stream
@@ -121,14 +121,17 @@ def demo(opt, read_folder=None):
         else:
             ret, f_time = detector.run(img)
         
+        if cnt % 100 == 1:
+            print("frame ", cnt)
+        
         tot_time += f_time
 
         # log run time
-        time_str = 'frame {} |'.format(cnt)
-        for stat in time_stats:
-            time_str = time_str + '{} {:.3f}s |'.format(stat, ret[stat])
+        #time_str = 'frame {} |'.format(cnt)
+        #for stat in time_stats:
+        #    time_str = time_str + '{} {:.3f}s |'.format(stat, ret[stat])
         #print(results)
-        print(time_str)
+        #print(time_str)
 
         # results[cnt] is a list of dicts:
         #  [{'bbox': [x1, y1, x2, y2], 'tracking_id': id, 'category_id': c, ...}]
@@ -177,7 +180,5 @@ if __name__ == '__main__':
     for folder_name in sorted(bench_dir):
         fl = folder_name[folder_name.rfind('.') + 1:].lower()
         folder_paths.append(os.path.join(folder, folder_name))
-    for path in folder_paths:
-        print(path[len(path)-5:])
     for path in folder_paths:
         demo(opt, path)
