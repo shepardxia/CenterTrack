@@ -35,7 +35,7 @@ class Tracker(object):
       unmatched_dets = []
       unmatched_tracks = []
       for i in score:
-        if i // 0.5 > 0 and cnt in kept:
+        if i // 0.3 > 0 and cnt in kept:
           matches.append([cnt, cnt])
         else:
           unmatched_tracks.append(cnt)

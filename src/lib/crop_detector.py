@@ -11,6 +11,7 @@ import time
 import torch
 import torchvision
 import math
+from lib.utils.image import transform_preds_with_trans
 
 from model.model import create_model, load_model
 from model.decode import generic_decode
@@ -61,11 +62,15 @@ class Detector(object):
         start = time.time()
         box_ids = []
         box_list = []
-        # convert to array
         for item in self.tracker.tracks:
             box_ids.append(item['tracking_id'])
             box_list.append(item['bbox'])
+        w = meta['width']
+        h = meta['height']
+        trans = get_affine_transform(np.array([w/2, h/2], dtype=np.float32), np.array([w, h], dtype=np.float32), 0, (meta['inp_width'], meta['inp_height']))
         boxes = np.array(box_list)
+        for i in range(len(box_list)):
+            boxes[i] = transform_preds_with_trans(boxes[i].reshape(2, 2), trans).reshape(4)
    
         temp = np.zeros(boxes.shape)
         temp[:,0] = (boxes[:,0] + boxes[:,2])/2.0
@@ -90,25 +95,26 @@ class Detector(object):
         new_boxes[:,4] = boxes[:,1] + box_scales/2 
         torch_boxes = torch.from_numpy(new_boxes).float().to(self.opt.device)
         # crop using roi align b
-        crops = torchvision.ops.roi_align(frame, torch_boxes,(64, 64))
-        crop_hms = torchvision.ops.roi_align(pre_hms, torch_boxes, (64, 64))
-        self.pre_images = torchvision.ops.roi_align(self.pre_images, torch_boxes, (64, 64))
-        return crops, crop_hms, box_scales, new_boxes
+        crops = torchvision.ops.roi_align(frame, torch_boxes,(self.opt.crop_size, self.opt.crop_size))
+        #crop_hms = torchvision.ops.roi_align(pre_hms, torch_boxes, (self.opt.crop_size, self.opt.crop_size))
+        self.pre_images = torchvision.ops.roi_align(self.pre_images, torch_boxes, (self.opt.crop_size, self.opt.crop_size))
+        cnt = 0
+
+        return crops, None, box_scales, new_boxes
 
     def local_to_global(self, dets, box_scales, new_boxes):
 
         n_anchors = dets['bboxes'].shape[1]
         box_scales = torch.from_numpy(box_scales).unsqueeze(1).repeat(1,n_anchors).numpy()
         new_boxes = torch.from_numpy(new_boxes).unsqueeze(1).repeat(1,n_anchors,1).numpy()
-        dets['bboxes'][:,:,0] = (dets['bboxes'][:,:,0]*box_scales/64 + new_boxes[:,:,1]/4)
-        dets['bboxes'][:,:,1] = (dets['bboxes'][:,:,1]*box_scales/64 + new_boxes[:,:,2]/4 + 2)
-        dets['bboxes'][:,:,2] = (dets['bboxes'][:,:,2]*box_scales/64 + new_boxes[:,:,1]/4)
-        dets['bboxes'][:,:,3] = (dets['bboxes'][:,:,3]*box_scales/64 + new_boxes[:,:,2]/4 + 2)
+        dets['bboxes'][:,:,0] = (dets['bboxes'][:,:,0]*box_scales/self.opt.crop_size + new_boxes[:,:,1]/self.opt.down_ratio)
+        dets['bboxes'][:,:,1] = (dets['bboxes'][:,:,1]*box_scales/self.opt.crop_size + new_boxes[:,:,2]/self.opt.down_ratio)
+        dets['bboxes'][:,:,2] = (dets['bboxes'][:,:,2]*box_scales/self.opt.crop_size + new_boxes[:,:,1]/self.opt.down_ratio)
+        dets['bboxes'][:,:,3] = (dets['bboxes'][:,:,3]*box_scales/self.opt.crop_size + new_boxes[:,:,2]/self.opt.down_ratio)
 
 
-
-        dets['xs'] = dets['xs']*box_scales/64 + new_boxes[:,:,1]/4
-        dets['ys'] = dets['ys']*box_scales/64 + new_boxes[:,:,2]/4
+        dets['xs'] = dets['xs']*box_scales/64 + new_boxes[:,:,1]/self.opt.down_ratio
+        dets['ys'] = dets['ys']*box_scales/64 + new_boxes[:,:,2]/self.opt.down_ratio
 
         dets['cts'][:,:,0] = dets['xs']
         dets['cts'][:,:,1] = dets['ys']
@@ -132,10 +138,9 @@ class Detector(object):
         old_boxes = np.zeros((dets['bboxes'].shape[0], 1, 4))
 
         for i in range(len(self.tracker.tracks)):
-            old_boxes[i, 0, :] = self.tracker.tracks[i]['bbox']/4
-
+            old_boxes[i, 0, :] = self.tracker.tracks[i]['bbox']/self.opt.down_ratio
+        
         old_boxes = torch.from_numpy(old_boxes).float().to(self.opt.device).repeat(1, dets['bboxes'].shape[1], 1)
-
         area_ap = (old_boxes[:,:,2]-old_boxes[:,:,0]) * (old_boxes[:,:,3]-old_boxes[:,:,1])
         area_dets = (dets['bboxes'][:,:,2]-dets['bboxes'][:,:,0]) * (dets['bboxes'][:,:,3]-dets['bboxes'][:,:,1])
         
@@ -244,7 +249,7 @@ class Detector(object):
                     self.local_to_global(dets, box_scales, new_boxes)
                     iou = self.md_iou(dets)
                     conf = dets['scores']
-                    scores = 0.8*torch.from_numpy(conf).to(self.opt.device) + iou
+                    scores = 0.7 * torch.from_numpy(conf).to(self.opt.device) + 0.3 * iou
                     best, keep = torch.max(scores, dim=1)
                     keep = keep.cpu().numpy()
                     idx = torch.arange(len(dets['scores'])).numpy()
@@ -307,7 +312,7 @@ class Detector(object):
         track_time += tracking_time - end_time
         tot_time += tracking_time - start_time
 
-        if self.opt.debug >= 10:
+        if self.opt.debug >= 1:
             self.show_results(self.debugger, image, results)
         self.cnt += 1
 
@@ -353,8 +358,8 @@ class Detector(object):
             s = max(height, width) * 1.0
             # s = np.array([inp_width, inp_height], dtype=np.float32)
         else:
-            inp_height = (new_height | self.opt.pad) + 1
-            inp_width = (new_width | self.opt.pad) + 1
+            inp_height = (new_height | self.opt.pad) + 1 if new_height % 32 != 0 else new_height
+            inp_width = (new_width | self.opt.pad) + 1 if new_width % 32 != 0 else new_width
             c = np.array([new_width // 2, new_height // 2], dtype=np.float32)
             s = np.array([inp_width, inp_height], dtype=np.float32)
         resized_image = cv2.resize(image, (new_width, new_height))

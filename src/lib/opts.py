@@ -254,8 +254,12 @@ class opts(object):
     self.parser.add_argument('--custom_dataset_img_path', default='')
     self.parser.add_argument('--custom_dataset_ann_path', default='')
     
-    # crop or not
+    # crop options
     self.parser.add_argument('--crop', action='store_true')
+    self.parser.add_argument('--crop_size', type=int, default=64)
+    self.parser.add_argument('--in_dir', type=str, default=None)
+    self.parser.add_argument('--crop_cycle', type=int, default=7)
+    self.parser.add_argument('--out_dir', type=str, default='./results')
 
   def parse(self, args=''):
     if args == '':

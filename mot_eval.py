@@ -220,7 +220,7 @@ def test_regions_fraction(regions,bbox,cutoff = 0.5):
     
     return False
 
-def evaluate_mot(preds,gts,ignored_regions = [],threshold = 100,ignore_threshold = 0.5):
+def evaluate_mot(preds,gts,fold_path,ignored_regions = [],threshold = 100,ignore_threshold = 0.5):
     """
     Description:
     -----------
@@ -248,10 +248,19 @@ def evaluate_mot(preds,gts,ignored_regions = [],threshold = 100,ignore_threshold
         while len(preds) > len(gts):
             gts.append([])
 
+    fold_list = []
+    if os.path.isdir(fold_path):
+                ls = os.listdir(fold_path)
+                for file_name in sorted(ls):
+                    ext = file_name[file_name.rfind('.') + 1:].lower()
+                    fold_list.append(os.path.join(fold_path, file_name))
+
     for frame in range(len(gts)):
         # get gts in desired format
         gt = gts[frame]
+        image = cv2.imread(fold_list[frame])
         gt_ids = [] # object ids for each object in this frame
+        
         for obj in gt:
             
             # gx = (obj["bbox"][0] + obj['bbox'][2]) /2.0
@@ -266,12 +275,9 @@ def evaluate_mot(preds,gts,ignored_regions = [],threshold = 100,ignore_threshold
         
         # get preds in desired format
         pred = preds[frame]
-        #print("fuck you")
-        #print("total bboxes is:", len(preds[frame]))
-        #print("fuck you")
+
         pred_ids = [] # object ids for each object in this frame
         pred_idxs = [] # the index for each object in the frame, not id
-
 
         #cnt = 0
         #tot = 0
@@ -287,10 +293,21 @@ def evaluate_mot(preds,gts,ignored_regions = [],threshold = 100,ignore_threshold
             
             if not exclude:
                 pred_ids.append(obj["id"])
-                #cv2.rectangle(image, ((int)(obj["bbox"][0]),(int)(obj["bbox"][1])), ((int)(obj["bbox"][2]),(int)(obj["bbox"][3])), (0,255,0), 1)
+                cv2.rectangle(image, ((int)(obj["bbox"][0]),(int)(obj["bbox"][1])), ((int)(obj["bbox"][2]),(int)(obj["bbox"][3])), (0,255,0), 1)
+                ct = [(obj["bbox"][0] + obj["bbox"][2])/2, (obj["bbox"][1] + obj["bbox"][3])/2]
+                scale = max(obj['bbox'][2] - obj['bbox'][0], obj['bbox'][3] - obj['bbox'][1])
+                scale *= 0.75
+                cv2.rectangle(image, ((int)(ct[0] - scale),(int)(ct[1] - scale)), ((int)(ct[0] + scale),(int)(ct[1] + scale)), (0,0,255), 1)
                 pred_idxs.append(i)
                 #cnt += 1
+        #if frame % 7 == 1:
+        #    #cv2.rectangle(image, (30, 30), (45, 45), (0, 0, 255), -1)
+        #    print("full frame")
+        #else:
+        #    print("crop frame")
         #cv2.imshow('image',image)
+
+        #cv2.resizeWindow('image', (1440, 810))
         #cv2.waitKey(0)
         #print("before removal cnt is:", tot)
         #print("after removal cnt is:", cnt)

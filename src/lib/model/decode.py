@@ -180,3 +180,4 @@ def generic_decode(output, K=100, opt=None):
       [pre_xs.unsqueeze(2), pre_ys.unsqueeze(2)], dim=2)
   
   return ret
+ 

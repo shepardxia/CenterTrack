@@ -14,6 +14,7 @@ import copy
 import numpy as np
 from opts import opts
 from crop_detector import Detector
+from datetime import datetime
 
 
 image_ext = ['jpg', 'jpeg', 'png', 'webp']
@@ -21,7 +22,7 @@ video_ext = ['mp4', 'mov', 'avi', 'mkv']
 time_stats = ['tot', 'load', 'pre', 'net', 'dec', 'post', 'merge', 'display']
 
 
-def results_format_and_output(results, time, frames, save_name):
+def results_format_and_output(opt, results, time, frames):
     dets = []
     for frame in results:
         frame_result = []
@@ -35,13 +36,15 @@ def results_format_and_output(results, time, frames, save_name):
     ret = []
     ret.append([time, frames])
     ret.append(dets)
-    json.dump(ret, open('./bench/DETRAC-coco-stats/{}.json'.format(save_name), 'w'))
+    if not os.path.exists(opt.out_dir):
+        os.makedirs(opt.out_dir)
+    save_name = datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
+    json.dump(ret, open(os.path.join(opt.out_dir, '{}.json'.format(save_name)), 'w'))
 
     
 
 def demo(opt, read_folder=None):
     os.environ['CUDA_VISIBLE_DEVICES'] = opt.gpus_str
-    opt.debug = max(opt.debug, 1)
     detector = Detector(opt)
 
     if read_folder is not None:
@@ -97,8 +100,7 @@ def demo(opt, read_folder=None):
             if cnt < len(image_names):
                 img = cv2.imread(image_names[cnt])
             else:
-                results_format_and_output(results, tot_time, cnt, None \
-                    if read_folder is None else read_folder[len(read_folder)-5:])
+                results_format_and_output(opt, results, tot_time, cnt)
                 return
         cnt += 1
         # resize the original video for saving video results
@@ -114,7 +116,7 @@ def demo(opt, read_folder=None):
         # track or detect the image.
         
         if(opt.crop == True):
-            if(cnt % 7 == 1):
+            if(cnt % opt.crop_cycle == 1):
                 ret, f_time = detector.run(img, 0)
             else:
                 ret, f_time = detector.run(img, 1)
@@ -173,12 +175,15 @@ def _to_list(results):
 
 if __name__ == '__main__':
     opt = opts().init()
-    folder = './bench/DETRAC-train-data'
-    bench_names = []
-    bench_dir = os.listdir(folder)
-    folder_paths = []
-    for folder_name in sorted(bench_dir):
-        fl = folder_name[folder_name.rfind('.') + 1:].lower()
-        folder_paths.append(os.path.join(folder, folder_name))
-    for path in folder_paths:
-        demo(opt, path)
+    folder = opt.in_dir
+    if folder is not None:
+        bench_names = []
+        bench_dir = os.listdir(folder)
+        folder_paths = []
+        for folder_name in sorted(bench_dir):
+            fl = folder_name[folder_name.rfind('.') + 1:].lower()
+            folder_paths.append(os.path.join(folder, folder_name))
+        for path in folder_paths:
+            demo(opt, path)
+    else:
+        demo(opt)
